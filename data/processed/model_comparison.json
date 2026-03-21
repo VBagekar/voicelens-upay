@@ -1,0 +1,29 @@
+{
+  "vader": {
+    "accuracy": 29.4,
+    "time_seconds": 0.02,
+    "samples": 500,
+    "f1_negative": 32.3,
+    "f1_neutral": 2.2,
+    "f1_positive": 37.9,
+    "macro_f1": 24.1
+  },
+  "textblob": {
+    "accuracy": 26.2,
+    "time_seconds": 0.06,
+    "samples": 500,
+    "f1_negative": 27.7,
+    "f1_neutral": 9.0,
+    "f1_positive": 34.8,
+    "macro_f1": 23.8
+  },
+  "bert": {
+    "accuracy": 96.8,
+    "time_seconds": 1.22,
+    "samples": 500,
+    "f1_negative": 96.6,
+    "f1_neutral": 98.1,
+    "f1_positive": 96.5,
+    "macro_f1": 97.1
+  }
+}

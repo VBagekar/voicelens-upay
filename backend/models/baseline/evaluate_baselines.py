@@ -85,7 +85,18 @@ def print_comparison_table(vader_res: dict, textblob_res: dict):
     else:
         print("  🤝 Tie!")
     print("=" * 60)
-
+def evaluate_by_source(name: str, analyzer, df: pd.DataFrame):
+    """Show accuracy broken down by dataset source."""
+    print(f"\n  {name} — Accuracy by Source:")
+    print(f"  {'Source':<20} {'Accuracy':<12} {'Samples'}")
+    print(f"  {'-'*45}")
+    for source in df["source"].unique():
+        subset = df[df["source"] == source]
+        texts  = subset["text"].tolist()
+        labels = subset["label"].tolist()
+        preds  = [r["label"] for r in analyzer.analyze_batch(texts)]
+        acc    = round(accuracy_score(labels, preds) * 100, 2)
+        print(f"  {source:<20} {acc}%{'':<8} {len(texts)}")
 
 def main():
     # ── Load dataset ──────────────────────────────────────────────────────────
@@ -105,7 +116,8 @@ def main():
     # ── Run evaluations ───────────────────────────────────────────────────────
     vader_res    = evaluate_model("VADER",    VaderAnalyzer(),    texts, labels)
     textblob_res = evaluate_model("TextBlob", TextBlobAnalyzer(), texts, labels)
-
+    evaluate_by_source("VADER",    VaderAnalyzer(),    df)
+    evaluate_by_source("TextBlob", TextBlobAnalyzer(), df)
     # ── Print comparison ──────────────────────────────────────────────────────
     print_comparison_table(vader_res, textblob_res)
 

@@ -2,7 +2,7 @@
   "vader": {
     "model": "VADER",
     "accuracy": 29.46,
-    "time_seconds": 0.24,
+    "time_seconds": 0.23,
     "samples_tested": 4100,
     "report": {
       "negative": {
@@ -58,7 +58,7 @@
   "textblob": {
     "model": "TextBlob",
     "accuracy": 26.63,
-    "time_seconds": 0.61,
+    "time_seconds": 0.58,
     "samples_tested": 4100,
     "report": {
       "negative": {
