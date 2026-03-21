@@ -21,4 +21,30 @@ __pycache__/
 # Data files (large)
 *.csv
 *.xlsx
+data/raw/# ── ML Model Weights (too large for GitHub) ───────────────────────
+models/bert_voicelens/pytorch_model.bin
+models/bert_voicelens/model.safetensors
+models/bert_voicelens/optimizer.pt
+*.bin
+*.safetensors
+*.pt
+*.h5
+
+# ── Large data files ──────────────────────────────────────────────
 data/raw/
+*.csv
+*.xlsx
+*.xls
+
+# ── Python & venv ─────────────────────────────────────────────────
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# ── Jupyter ───────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── pip temp ──────────────────────────────────────────────────────
+D:/pip-temp/
