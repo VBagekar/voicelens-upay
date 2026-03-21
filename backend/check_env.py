@@ -47,8 +47,8 @@ def check_textblob():
 
 def check_flask():
     try:
-        import flask
-        print(f"Flask              : {flask.__version__}")
+        import importlib.metadata
+        print(f"Flask              : {importlib.metadata.version('flask')}")
     except ImportError:
         print("Flask              : NOT INSTALLED")
 
