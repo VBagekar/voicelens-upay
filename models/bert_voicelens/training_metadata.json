@@ -1,0 +1,41 @@
+{
+  "model_name": "bert-base-uncased",
+  "num_labels": 3,
+  "epochs": 3,
+  "batch_size": 16,
+  "max_length": 128,
+  "learning_rate": 2e-05,
+  "test_accuracy": 89.27,
+  "best_val_acc": 91.71,
+  "training_time": 302.6,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.7827,
+      "train_acc": 59.27,
+      "val_acc": 82.44
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.3032,
+      "train_acc": 87.99,
+      "val_acc": 90.73
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.1378,
+      "train_acc": 95.37,
+      "val_acc": 91.71
+    }
+  ],
+  "label2id": {
+    "negative": 0,
+    "neutral": 1,
+    "positive": 2
+  },
+  "id2label": {
+    "0": "negative",
+    "1": "neutral",
+    "2": "positive"
+  }
+}
