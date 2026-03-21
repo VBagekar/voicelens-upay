@@ -1,5 +1,6 @@
 import React from "react";
 
+// REPLACE:
 const FEATURES = [
     {
         icon: "📝", title: "Text Analyzer",
@@ -10,11 +11,6 @@ const FEATURES = [
         icon: "📂", title: "File Upload",
         desc: "Upload CSV or Excel files with hundreds of responses and analyze them in bulk.",
         page: "file"
-    },
-    {
-        icon: "📊", title: "Impact Dashboard",
-        desc: "Visualize sentiment trends, emotion distribution, and program impact over time.",
-        page: "dashboard"
     },
 ];
 

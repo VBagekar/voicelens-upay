@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 
+// REPLACE:
 const LINKS = [
     { id: "home", label: "Home" },
     { id: "analyzer", label: "Analyzer" },
     { id: "file", label: "File Upload" },
-    { id: "dashboard", label: "Dashboard" },
 ];
 
 const Navbar = ({ activePage, setActivePage }) => {
