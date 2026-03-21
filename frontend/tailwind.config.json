@@ -1,0 +1,59 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+        "./src/**/*.{js,jsx,ts,tsx}",
+    ],
+  theme: {
+    extend: {
+      colors: {
+                // UPAY Brand Colors
+        upay: {
+          navy: "#003C64",
+          gold: "#F7AC2D",
+          teal: "#2D8F91",
+          light: "#E9EAEC",
+                }
+            },
+      fontFamily: {
+        heading: [
+                    "Montserrat",
+                    "sans-serif"
+                ],
+        body: [
+                    "Open Sans",
+                    "sans-serif"
+                ],
+            }
+        },
+    },
+  plugins: [],
+} /** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+        "./src/**/*.{js,jsx,ts,tsx}",
+    ],
+  theme: {
+    extend: {
+      colors: {
+                // UPAY Brand Colors
+        upay: {
+          navy: "#003C64",
+          gold: "#F7AC2D",
+          teal: "#2D8F91",
+          light: "#E9EAEC",
+                }
+            },
+      fontFamily: {
+        heading: [
+                    "Montserrat",
+                    "sans-serif"
+                ],
+        body: [
+                    "Open Sans",
+                    "sans-serif"
+                ],
+            }
+        },
+    },
+  plugins: [],
+}
