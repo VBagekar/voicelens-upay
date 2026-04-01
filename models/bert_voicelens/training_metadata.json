@@ -7,7 +7,7 @@
   "learning_rate": 2e-05,
   "test_accuracy": 89.27,
   "best_val_acc": 91.71,
-  "training_time": 302.6,
+  "training_time": 264.2,
   "history": [
     {
       "epoch": 1,

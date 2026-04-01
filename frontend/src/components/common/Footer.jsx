@@ -44,7 +44,7 @@ const Footer = () => (
                     fontFamily: "Open Sans, sans-serif",
                     fontSize: 12, color: "#64849a", margin: 0,
                 }}>
-                    © 2025 VoiceLens · Built for UPAY NGO
+                    © 2026 VoiceLens · Built for UPAY NGO
                 </p>
             </div>
 
