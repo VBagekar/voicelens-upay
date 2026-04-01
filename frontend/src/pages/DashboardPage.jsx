@@ -1,411 +1,519 @@
-import React, { useState, useEffect } from "react";
-import {
-    PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
-    BarChart, Bar, XAxis, YAxis, CartesianGrid,
-} from "recharts";
-import { analyzeText } from "../services/api";
+import React, { useState } from "react";
 
-// ── Colours ───────────────────────────────────────────────────────────────────
-const COLORS = {
-    positive: "#22c55e",
-    neutral: "#38bdf8",
-    negative: "#f43f5e",
-    navy: "#003C64",
-    gold: "#F7AC2D",
-    teal: "#2D8F91",
+// ── Config ────────────────────────────────────────────────────────────────────
+const CFG = {
+    positive: { color: "#16a34a", bg: "#f0fdf4", border: "#22c55e", emoji: "😊" },
+    neutral: { color: "#0284c7", bg: "#f0f9ff", border: "#38bdf8", emoji: "😐" },
+    negative: { color: "#e11d48", bg: "#fff1f2", border: "#f43f5e", emoji: "😔" },
 };
 
-// ── Demo seed data (shown before user runs any analysis) ─────────────────────
-const DEMO_HISTORY = [
-    { text: "The tutoring sessions helped my child improve significantly.", label: "positive", model: "bert", confidence: 0.97 },
-    { text: "Volunteers were extremely caring and dedicated.", label: "positive", model: "bert", confidence: 0.95 },
-    { text: "Sessions were too infrequent and poorly organized.", label: "negative", model: "bert", confidence: 0.91 },
-    { text: "The program session took place at the community hall.", label: "neutral", model: "bert", confidence: 0.88 },
-    { text: "I feel hopeful after attending the skill development program.", label: "positive", model: "bert", confidence: 0.94 },
-    { text: "Promised resources were never delivered to our school.", label: "negative", model: "bert", confidence: 0.89 },
-    { text: "UPAY has been operating in this district for five years.", label: "neutral", model: "bert", confidence: 0.82 },
-    { text: "The free health camp was a blessing for our entire village.", label: "positive", model: "bert", confidence: 0.96 },
-];
-
-const MODEL_ACCURACY = [
-    { model: "VADER", accuracy: 29.46, fill: "#94a3b8" },
-    { model: "TextBlob", accuracy: 26.63, fill: "#64748b" },
-    { model: "BERT", accuracy: 89.27, fill: "#003C64" },
-];
-
-// ── Small reusable components ─────────────────────────────────────────────────
-const Card = ({ children, style = {} }) => (
-    <div style={{
-        backgroundColor: "white", borderRadius: 20,
-        padding: 24, boxShadow: "0 2px 10px rgba(0,0,0,0.07)",
-        border: "1px solid #E9EAEC", ...style,
-    }}>
-        {children}
-    </div>
-);
-
-const SectionTitle = ({ children }) => (
-    <p style={{
-        fontFamily: "Montserrat, sans-serif", fontWeight: 700,
-        fontSize: 15, color: "#003C64", marginBottom: 16,
-    }}>{children}</p>
-);
-
-const Badge = ({ label }) => {
-    const cfg = {
-        positive: { bg: "#f0fdf4", color: "#16a34a" },
-        neutral: { bg: "#f0f9ff", color: "#0284c7" },
-        negative: { bg: "#fff1f2", color: "#e11d48" },
-    }[label] || { bg: "#f3f4f6", color: "#6b7280" };
+// ── Pure SVG Donut (no library) ───────────────────────────────────────────────
+const DonutChart = ({ positive, neutral, negative, total }) => {
+    if (!total) return null;
+    const r = 70, stroke = 18, circ = 2 * Math.PI * r;
+    const segs = [
+        { pct: positive / total, color: "#22c55e" },
+        { pct: neutral / total, color: "#38bdf8" },
+        { pct: negative / total, color: "#f43f5e" },
+    ];
+    let offset = 0;
     return (
-        <span style={{
-            backgroundColor: cfg.bg, color: cfg.color,
-            fontSize: 11, fontWeight: 700, padding: "3px 10px",
-            borderRadius: 20, fontFamily: "Open Sans, sans-serif",
-            textTransform: "uppercase",
-        }}>{label}</span>
+        <svg viewBox="0 0 160 160" width="160" height="160">
+            <circle cx="80" cy="80" r={r} fill="none"
+                stroke="#E9EAEC" strokeWidth={stroke} />
+            {segs.map((s, i) => {
+                const dash = s.pct * circ;
+                const rotate = offset * 360 - 90;
+                offset += s.pct;
+                return (
+                    <circle key={i} cx="80" cy="80" r={r}
+                        fill="none" stroke={s.color} strokeWidth={stroke}
+                        strokeDasharray={`${dash} ${circ - dash}`}
+                        transform={`rotate(${rotate} 80 80)`}
+                    />
+                );
+            })}
+            <text x="80" y="74" textAnchor="middle"
+                style={{
+                    fontFamily: "Montserrat,sans-serif",
+                    fontSize: 22, fontWeight: 800, fill: "#003C64"
+                }}>
+                {total}
+            </text>
+            <text x="80" y="92" textAnchor="middle"
+                style={{
+                    fontFamily: "Open Sans,sans-serif",
+                    fontSize: 11, fill: "#6b7280"
+                }}>
+                analyzed
+            </text>
+        </svg>
     );
 };
 
-// ── Custom tooltip for pie chart ──────────────────────────────────────────────
-const PieTooltip = ({ active, payload }) => {
-    if (!active || !payload?.length) return null;
+// ── Bar row ───────────────────────────────────────────────────────────────────
+const Bar = ({ label, count, total, cfg }) => {
+    const pct = total ? Math.round(count / total * 100) : 0;
     return (
-        <div style={{
-            backgroundColor: "white", border: "1px solid #E9EAEC",
-            borderRadius: 10, padding: "8px 14px",
-            fontFamily: "Open Sans, sans-serif", fontSize: 13,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-        }}>
-            <strong style={{ color: "#003C64" }}>{payload[0].name}</strong>
-            <br />
-            {payload[0].value} texts ({payload[0].payload.pct}%)
+        <div style={{ marginBottom: 14 }}>
+            <div style={{
+                display: "flex", justifyContent: "space-between",
+                marginBottom: 5
+            }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 16 }}>{cfg.emoji}</span>
+                    <span style={{
+                        fontFamily: "Open Sans,sans-serif", fontSize: 13,
+                        color: "#374151", textTransform: "capitalize"
+                    }}>
+                        {label}
+                    </span>
+                </div>
+                <span style={{
+                    fontFamily: "Montserrat,sans-serif", fontSize: 13,
+                    fontWeight: 700, color: cfg.color
+                }}>
+                    {count} <span style={{ color: "#9ca3af", fontWeight: 400 }}>({pct}%)</span>
+                </span>
+            </div>
+            <div style={{
+                height: 10, backgroundColor: "#E9EAEC",
+                borderRadius: 99, overflow: "hidden"
+            }}>
+                <div style={{
+                    height: "100%", width: `${pct}%`,
+                    backgroundColor: cfg.border, borderRadius: 99,
+                    transition: "width 1s ease",
+                }} />
+            </div>
         </div>
     );
 };
 
-// ── Impact Score calculator ───────────────────────────────────────────────────
-const calcImpactScore = (history) => {
-    if (!history.length) return 0;
-    const pos = history.filter(h => h.label === "positive").length;
-    const neg = history.filter(h => h.label === "negative").length;
-    const score = Math.round(((pos - neg * 0.5) / history.length) * 100);
-    return Math.max(0, Math.min(100, score));
+// ── Impact Score ──────────────────────────────────────────────────────────────
+const impactScore = (pos, neg, total) => {
+    if (!total) return 0;
+    return Math.max(0, Math.min(100,
+        Math.round(((pos - neg * 0.5) / total) * 100)
+    ));
 };
 
-const impactLabel = (score) => {
-    if (score >= 70) return { text: "Strong Positive Impact 🌟", color: "#16a34a" };
-    if (score >= 50) return { text: "Moderate Positive Impact 😊", color: "#2D8F91" };
-    if (score >= 30) return { text: "Mixed Sentiment ⚖️", color: "#f59e0b" };
-    return { text: "Needs Attention ⚠️", color: "#e11d48" };
+const impactMeta = (score) => {
+    if (score >= 70) return { label: "Strong Positive Impact 🌟", color: "#16a34a" };
+    if (score >= 50) return { label: "Moderate Positive Impact 😊", color: "#2D8F91" };
+    if (score >= 30) return { label: "Mixed Sentiment ⚖️", color: "#f59e0b" };
+    return { label: "Needs Attention ⚠️", color: "#e11d48" };
 };
 
-// ── Quick Analyze bar (inside Dashboard) ────────────────────────────────────
-const QuickAnalyze = ({ onResult }) => {
-    const [text, setText] = useState("");
-    const [loading, setLoading] = useState(false);
-
-    const handle = async () => {
-        if (!text.trim()) return;
-        setLoading(true);
-        try {
-            const res = await analyzeText(text, "bert");
-            onResult({ ...res.data, text });
-            setText("");
-        } catch { /* silent */ }
-        finally { setLoading(false); }
-    };
-
-    return (
-        <Card style={{ marginBottom: 24 }}>
-            <SectionTitle>⚡ Quick Analyze — Add to Dashboard</SectionTitle>
-            <div style={{ display: "flex", gap: 12 }}>
-                <input
-                    value={text}
-                    onChange={e => setText(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handle()}
-                    placeholder="Type a feedback sentence and press Analyze..."
-                    style={{
-                        flex: 1, padding: "12px 16px", borderRadius: 12,
-                        border: "2px solid #E9EAEC", fontFamily: "Open Sans, sans-serif",
-                        fontSize: 14, color: "#003C64", outline: "none",
-                    }}
-                />
-                <button
-                    onClick={handle}
-                    disabled={loading || !text.trim()}
-                    style={{
-                        padding: "12px 20px", borderRadius: 12, border: "none",
-                        backgroundColor: loading || !text.trim() ? "#9ca3af" : "#003C64",
-                        color: "white", fontFamily: "Montserrat, sans-serif",
-                        fontWeight: 700, fontSize: 13, cursor: "pointer",
-                        whiteSpace: "nowrap",
-                    }}>
-                    {loading ? "⏳" : "Analyze →"}
-                </button>
-            </div>
-        </Card>
+// ── Download CSV helper ───────────────────────────────────────────────────────
+const downloadCSV = (results, filename) => {
+    const header = "feedback,sentiment,confidence,model";
+    const rows = results.map(r =>
+        `"${String(r.text || "").replace(/"/g, '""')}",${r.label},${Math.round((r.confidence || 0) * 100)}%,${r.model}`
     );
+    const blob = new Blob([[header, ...rows].join("\n")],
+        { type: "text/csv;charset=utf-8;" });
+    const a = Object.assign(document.createElement("a"),
+        {
+            href: URL.createObjectURL(blob),
+            download: `voicelens_${filename || "results"}.csv`
+        });
+    a.click();
 };
 
 // ── MAIN DASHBOARD ────────────────────────────────────────────────────────────
-const DashboardPage = () => {
-    const [history, setHistory] = useState(DEMO_HISTORY);
-    const [isDemo, setIsDemo] = useState(true);
+const DashboardPage = ({ uploadResults, setActivePage }) => {
+    const [showAll, setShowAll] = useState(false);
+    const [filter, setFilter] = useState("all");
 
-    // Build pie data from history
-    const counts = history.reduce((acc, h) => {
-        acc[h.label] = (acc[h.label] || 0) + 1;
-        return acc;
-    }, {});
-    const total = history.length;
-    const pieData = ["positive", "neutral", "negative"]
-        .filter(k => counts[k])
-        .map(k => ({
-            name: k.charAt(0).toUpperCase() + k.slice(1),
-            value: counts[k],
-            pct: Math.round((counts[k] / total) * 100),
-            fill: COLORS[k],
-        }));
+    // ── No data state ─────────────────────────────────────────────────────────
+    if (!uploadResults) {
+        return (
+            <div style={{
+                maxWidth: 700, margin: "0 auto", padding: "60px 24px",
+                textAlign: "center"
+            }}>
+                <div style={{ fontSize: 64, marginBottom: 16 }}>📊</div>
+                <h2 style={{
+                    fontFamily: "Montserrat,sans-serif", fontSize: 24,
+                    fontWeight: 800, color: "#003C64", marginBottom: 12,
+                }}>No Analysis Yet</h2>
+                <p style={{
+                    fontFamily: "Open Sans,sans-serif", fontSize: 15,
+                    color: "#6b7280", marginBottom: 28, lineHeight: 1.7,
+                }}>
+                    Upload a CSV or Excel file in the File Upload page
+                    to see your full sentiment analysis dashboard here.
+                </p>
+                <button
+                    onClick={() => setActivePage("file")}
+                    style={{
+                        padding: "14px 32px", borderRadius: 12, border: "none",
+                        backgroundColor: "#003C64", color: "white",
+                        fontFamily: "Montserrat,sans-serif", fontWeight: 700,
+                        fontSize: 14, cursor: "pointer",
+                    }}>
+                    📂 Upload File Now →
+                </button>
+            </div>
+        );
+    }
 
-    const impactScore = calcImpactScore(history);
-    const impact = impactLabel(impactScore);
+    // ── Derived stats ─────────────────────────────────────────────────────────
+    const { results = [], summary = {}, total = 0,
+        filename = "file", model = "bert" } = uploadResults;
 
-    const handleNewResult = (result) => {
-        if (isDemo) { setHistory([result]); setIsDemo(false); }
-        else { setHistory(prev => [result, ...prev].slice(0, 50)); }
-    };
+    const pos = summary.positive || 0;
+    const neu = summary.neutral || 0;
+    const neg = summary.negative || 0;
+    const score = impactScore(pos, neg, total);
+    const meta = impactMeta(score);
+    const avgConf = results.length
+        ? Math.round(results.reduce((s, r) => s + (r.confidence || 0), 0) / results.length * 100)
+        : 0;
 
-    const resetToDemo = () => { setHistory(DEMO_HISTORY); setIsDemo(true); };
+    // Filter + paginate
+    const filtered = filter === "all"
+        ? results
+        : results.filter(r => r.label === filter);
+    const displayed = showAll ? filtered : filtered.slice(0, 10);
 
     return (
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 24px" }}>
 
-            {/* Header */}
+            {/* ── Header ── */}
             <div style={{
                 display: "flex", justifyContent: "space-between",
-                alignItems: "flex-start", marginBottom: 28
+                alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12,
             }}>
                 <div>
                     <h1 style={{
-                        fontFamily: "Montserrat, sans-serif", fontSize: 28,
-                        fontWeight: 800, color: "#003C64", margin: "0 0 6px",
-                    }}>📊 Impact Dashboard</h1>
+                        fontFamily: "Montserrat,sans-serif", fontSize: 28,
+                        fontWeight: 800, color: "#003C64", margin: "0 0 4px",
+                    }}>📊 Analysis Dashboard</h1>
                     <p style={{
-                        fontFamily: "Open Sans, sans-serif", fontSize: 14,
+                        fontFamily: "Open Sans,sans-serif", fontSize: 13,
                         color: "#6b7280", margin: 0,
                     }}>
-                        Real-time sentiment insights from UPAY community feedback.
+                        Results for <strong>{filename}</strong> ·
+                        Model: <strong>{model.toUpperCase()}</strong> ·
+                        {total} rows analyzed
                     </p>
                 </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    {isDemo && (
-                        <span style={{
-                            backgroundColor: "#fffbeb", color: "#92400e",
-                            fontSize: 11, padding: "4px 10px", borderRadius: 20,
-                            fontFamily: "Open Sans, sans-serif", fontWeight: 600,
-                            border: "1px solid #F7AC2D",
-                        }}>📌 Demo Data</span>
-                    )}
-                    {!isDemo && (
-                        <button onClick={resetToDemo} style={{
-                            padding: "8px 16px", borderRadius: 10,
-                            border: "1px solid #E9EAEC", backgroundColor: "white",
-                            fontFamily: "Open Sans, sans-serif", fontSize: 12,
-                            color: "#6b7280", cursor: "pointer",
-                        }}>Reset to Demo</button>
-                    )}
+                <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                        onClick={() => downloadCSV(results, filename)}
+                        style={{
+                            padding: "10px 16px", borderRadius: 10,
+                            border: "2px solid #003C64", backgroundColor: "white",
+                            color: "#003C64", fontFamily: "Montserrat,sans-serif",
+                            fontWeight: 700, fontSize: 12, cursor: "pointer",
+                        }}>⬇️ Export CSV</button>
+                    <button
+                        onClick={() => setActivePage("file")}
+                        style={{
+                            padding: "10px 16px", borderRadius: 10,
+                            border: "2px solid #E9EAEC", backgroundColor: "white",
+                            color: "#6b7280", fontFamily: "Open Sans,sans-serif",
+                            fontSize: 12, cursor: "pointer",
+                        }}>📂 New Upload</button>
                 </div>
             </div>
 
-            {/* Quick Analyze */}
-            <QuickAnalyze onResult={handleNewResult} />
-
-            {/* ── Top KPI Row ── */}
+            {/* ── KPI Cards ── */}
             <div style={{
                 display: "grid", gridTemplateColumns: "repeat(4,1fr)",
-                gap: 16, marginBottom: 24,
+                gap: 14, marginBottom: 20,
             }}>
                 {[
-                    { label: "Total Analyzed", value: total, icon: "📋" },
-                    { label: "Positive", value: `${counts.positive || 0}`, icon: "😊" },
-                    { label: "Neutral", value: `${counts.neutral || 0}`, icon: "😐" },
-                    { label: "Negative", value: `${counts.negative || 0}`, icon: "😔" },
-                ].map((kpi, i) => (
-                    <Card key={i} style={{ textAlign: "center", padding: 20 }}>
-                        <div style={{ fontSize: 28, marginBottom: 6 }}>{kpi.icon}</div>
+                    { icon: "📋", label: "Total Analyzed", value: total, color: "#003C64" },
+                    { icon: "😊", label: "Positive", value: pos, color: "#16a34a" },
+                    { icon: "😐", label: "Neutral", value: neu, color: "#0284c7" },
+                    { icon: "😔", label: "Negative", value: neg, color: "#e11d48" },
+                ].map((k, i) => (
+                    <div key={i} style={{
+                        backgroundColor: "white", borderRadius: 16, padding: "18px 16px",
+                        textAlign: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                        border: "1px solid #E9EAEC",
+                    }}>
+                        <div style={{ fontSize: 26, marginBottom: 4 }}>{k.icon}</div>
                         <p style={{
-                            fontFamily: "Montserrat, sans-serif", fontSize: 26,
-                            fontWeight: 800, color: "#003C64", margin: "0 0 4px",
-                        }}>{kpi.value}</p>
+                            fontFamily: "Montserrat,sans-serif", fontSize: 28,
+                            fontWeight: 800, color: k.color, margin: "0 0 2px",
+                        }}>{k.value}</p>
                         <p style={{
-                            fontFamily: "Open Sans, sans-serif",
-                            fontSize: 12, color: "#6b7280", margin: 0,
-                        }}>{kpi.label}</p>
-                    </Card>
+                            fontFamily: "Open Sans,sans-serif",
+                            fontSize: 11, color: "#6b7280", margin: 0,
+                        }}>{k.label}</p>
+                    </div>
                 ))}
             </div>
 
-            {/* ── Impact Score + Pie ── */}
+            {/* ── Impact Score + Donut + Bars ── */}
             <div style={{
-                display: "grid", gridTemplateColumns: "1fr 1.6fr",
-                gap: 20, marginBottom: 24,
+                display: "grid", gridTemplateColumns: "200px 1fr 1.4fr",
+                gap: 16, marginBottom: 20,
             }}>
+
                 {/* Impact Score */}
-                <Card>
-                    <SectionTitle>🎯 NGO Impact Score</SectionTitle>
-                    <div style={{ textAlign: "center", padding: "16px 0" }}>
-                        {/* Circular score */}
-                        <div style={{
-                            width: 130, height: 130, borderRadius: "50%",
-                            border: `10px solid ${impact.color}`,
-                            display: "flex", flexDirection: "column",
-                            alignItems: "center", justifyContent: "center",
-                            margin: "0 auto 16px",
-                            boxShadow: `0 0 24px ${impact.color}33`,
-                        }}>
-                            <span style={{
-                                fontFamily: "Montserrat, sans-serif",
-                                fontSize: 32, fontWeight: 800, color: impact.color,
-                            }}>{impactScore}</span>
-                            <span style={{
-                                fontFamily: "Open Sans, sans-serif",
-                                fontSize: 11, color: "#6b7280",
-                            }}>/ 100</span>
-                        </div>
-                        <p style={{
-                            fontFamily: "Montserrat, sans-serif", fontWeight: 700,
-                            fontSize: 14, color: impact.color, margin: "0 0 8px",
-                        }}>{impact.text}</p>
-                        <p style={{
-                            fontFamily: "Open Sans, sans-serif",
-                            fontSize: 12, color: "#9ca3af", margin: 0,
-                        }}>Based on {total} feedback entries</p>
-                    </div>
-                </Card>
-
-                {/* Pie Chart */}
-                <Card>
-                    <SectionTitle>🍩 Sentiment Distribution</SectionTitle>
-                    <ResponsiveContainer width="100%" height={200}>
-                        <PieChart>
-                            <Pie
-                                data={pieData}
-                                cx="50%" cy="50%"
-                                innerRadius={55} outerRadius={85}
-                                paddingAngle={3} dataKey="value"
-                            >
-                                {pieData.map((entry, i) => (
-                                    <Cell key={i} fill={entry.fill} />
-                                ))}
-                            </Pie>
-                            <Tooltip content={<PieTooltip />} />
-                            <Legend
-                                formatter={(value, entry) => (
-                                    <span style={{
-                                        fontFamily: "Open Sans, sans-serif",
-                                        fontSize: 13, color: "#374151",
-                                    }}>
-                                        {value} ({entry.payload.pct}%)
-                                    </span>
-                                )}
-                            />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </Card>
-            </div>
-
-            {/* ── Model Accuracy Bar Chart ── */}
-            <Card style={{ marginBottom: 24 }}>
-                <SectionTitle>🧠 Model Accuracy Comparison</SectionTitle>
-                <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={MODEL_ACCURACY}
-                        margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis dataKey="model"
-                            tick={{
-                                fontFamily: "Montserrat, sans-serif",
-                                fontSize: 13, fontWeight: 700
-                            }} />
-                        <YAxis domain={[0, 100]}
-                            tick={{ fontFamily: "Open Sans, sans-serif", fontSize: 12 }}
-                            tickFormatter={v => `${v}%`} />
-                        <Tooltip
-                            formatter={(v) => [`${v}%`, "Accuracy"]}
-                            contentStyle={{
-                                fontFamily: "Open Sans, sans-serif", fontSize: 13,
-                                borderRadius: 10, border: "1px solid #E9EAEC",
-                            }}
-                        />
-                        <Bar dataKey="accuracy" radius={[8, 8, 0, 0]}>
-                            {MODEL_ACCURACY.map((entry, i) => (
-                                <Cell key={i} fill={entry.fill} />
-                            ))}
-                        </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
-                <p style={{
-                    fontFamily: "Open Sans, sans-serif", fontSize: 12,
-                    color: "#9ca3af", margin: "8px 0 0", textAlign: "center",
-                }}>
-                    BERT outperforms rule-based models by +59.8% on NGO feedback data
-                </p>
-            </Card>
-
-            {/* ── Recent Analysis History ── */}
-            <Card>
                 <div style={{
-                    display: "flex", justifyContent: "space-between",
-                    alignItems: "center", marginBottom: 16
+                    backgroundColor: "white", borderRadius: 16, padding: 20,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                    border: "1px solid #E9EAEC", textAlign: "center",
                 }}>
-                    <SectionTitle style={{ margin: 0 }}>🕐 Recent Analysis History</SectionTitle>
-                    <span style={{
-                        fontFamily: "Open Sans, sans-serif", fontSize: 12, color: "#9ca3af",
-                    }}>Last {Math.min(history.length, 10)} entries</span>
+                    <p style={{
+                        fontFamily: "Montserrat,sans-serif", fontWeight: 700,
+                        fontSize: 12, color: "#003C64", marginBottom: 12,
+                        textTransform: "uppercase", letterSpacing: 1,
+                    }}>Impact Score</p>
+                    <div style={{
+                        width: 100, height: 100, borderRadius: "50%",
+                        border: `8px solid ${meta.color}`,
+                        display: "flex", flexDirection: "column",
+                        alignItems: "center", justifyContent: "center",
+                        margin: "0 auto 12px",
+                        boxShadow: `0 0 20px ${meta.color}33`,
+                    }}>
+                        <span style={{
+                            fontFamily: "Montserrat,sans-serif",
+                            fontSize: 28, fontWeight: 800, color: meta.color,
+                        }}>{score}</span>
+                        <span style={{
+                            fontFamily: "Open Sans,sans-serif",
+                            fontSize: 9, color: "#9ca3af",
+                        }}>/100</span>
+                    </div>
+                    <p style={{
+                        fontFamily: "Open Sans,sans-serif", fontSize: 11,
+                        color: meta.color, fontWeight: 700, margin: "0 0 4px",
+                    }}>{meta.label}</p>
+                    <p style={{
+                        fontFamily: "Open Sans,sans-serif",
+                        fontSize: 10, color: "#9ca3af", margin: 0,
+                    }}>Avg confidence: {avgConf}%</p>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {history.slice(0, 10).map((item, i) => (
-                        <div key={i} style={{
-                            display: "flex", alignItems: "center",
-                            justifyContent: "space-between",
-                            padding: "12px 16px", borderRadius: 12,
-                            backgroundColor: "#f9fafb",
-                            border: "1px solid #E9EAEC",
-                        }}>
-                            <p style={{
-                                fontFamily: "Open Sans, sans-serif", fontSize: 13,
-                                color: "#374151", margin: 0, flex: 1,
-                                overflow: "hidden", textOverflow: "ellipsis",
-                                whiteSpace: "nowrap", marginRight: 16,
+                {/* Donut */}
+                <div style={{
+                    backgroundColor: "white", borderRadius: 16, padding: 20,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                    border: "1px solid #E9EAEC",
+                    display: "flex", flexDirection: "column", alignItems: "center",
+                    justifyContent: "center",
+                }}>
+                    <p style={{
+                        fontFamily: "Montserrat,sans-serif", fontWeight: 700,
+                        fontSize: 12, color: "#003C64", marginBottom: 12,
+                        textTransform: "uppercase", letterSpacing: 1,
+                    }}>Distribution</p>
+                    <DonutChart positive={pos} neutral={neu}
+                        negative={neg} total={total} />
+                    <div style={{ display: "flex", gap: 12, marginTop: 10 }}>
+                        {[
+                            { label: "Pos", color: "#22c55e" },
+                            { label: "Neu", color: "#38bdf8" },
+                            { label: "Neg", color: "#f43f5e" },
+                        ].map((l, i) => (
+                            <div key={i} style={{
+                                display: "flex",
+                                alignItems: "center", gap: 4
                             }}>
-                                {item.text}
-                            </p>
-                            <div style={{
-                                display: "flex", gap: 6, alignItems: "center",
-                                flexShrink: 0
-                            }}>
-                                <Badge label={item.label} />
+                                <div style={{
+                                    width: 8, height: 8, borderRadius: "50%",
+                                    backgroundColor: l.color
+                                }} />
                                 <span style={{
-                                    fontFamily: "Open Sans, sans-serif", fontSize: 11,
-                                    color: "#9ca3af",
+                                    fontFamily: "Open Sans,sans-serif",
+                                    fontSize: 11, color: "#6b7280"
                                 }}>
-                                    {Math.round((item.confidence || 0) * 100)}%
+                                    {l.label}
                                 </span>
                             </div>
-                        </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Bars */}
+                <div style={{
+                    backgroundColor: "white", borderRadius: 16, padding: 20,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                    border: "1px solid #E9EAEC",
+                }}>
+                    <p style={{
+                        fontFamily: "Montserrat,sans-serif", fontWeight: 700,
+                        fontSize: 12, color: "#003C64", marginBottom: 16,
+                        textTransform: "uppercase", letterSpacing: 1,
+                    }}>Sentiment Breakdown</p>
+                    <Bar label="positive" count={pos} total={total} cfg={CFG.positive} />
+                    <Bar label="neutral" count={neu} total={total} cfg={CFG.neutral} />
+                    <Bar label="negative" count={neg} total={total} cfg={CFG.negative} />
+
+                    {/* Key insight */}
+                    <div style={{
+                        marginTop: 16, padding: "10px 14px",
+                        backgroundColor: "#fffbeb", borderRadius: 10,
+                        borderLeft: "3px solid #F7AC2D",
+                    }}>
+                        <p style={{
+                            fontFamily: "Open Sans,sans-serif", fontSize: 12,
+                            color: "#92400e", margin: 0, lineHeight: 1.6,
+                        }}>
+                            💡 <strong>
+                                {pos > neg
+                                    ? `${Math.round(pos / total * 100)}% of feedback is positive — community response is encouraging.`
+                                    : neg > pos
+                                        ? `${Math.round(neg / total * 100)}% of feedback is negative — attention needed.`
+                                        : "Feedback is fairly balanced across all sentiments."
+                                }
+                            </strong>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Individual Results Table ── */}
+            <div style={{
+                backgroundColor: "white", borderRadius: 16, padding: 24,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                border: "1px solid #E9EAEC",
+            }}>
+                {/* Table header */}
+                <div style={{
+                    display: "flex", justifyContent: "space-between",
+                    alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10,
+                }}>
+                    <p style={{
+                        fontFamily: "Montserrat,sans-serif", fontWeight: 700,
+                        fontSize: 14, color: "#003C64", margin: 0,
+                    }}>Individual Feedback Results</p>
+
+                    {/* Filter buttons */}
+                    <div style={{ display: "flex", gap: 6 }}>
+                        {["all", "positive", "neutral", "negative"].map(f => (
+                            <button key={f} onClick={() => { setFilter(f); setShowAll(false); }}
+                                style={{
+                                    padding: "6px 12px", borderRadius: 20, cursor: "pointer",
+                                    border: `1.5px solid ${filter === f ? CFG[f]?.border || "#003C64" : "#E9EAEC"}`,
+                                    backgroundColor: filter === f ? CFG[f]?.bg || "#f0f4f8" : "white",
+                                    color: filter === f ? CFG[f]?.color || "#003C64" : "#6b7280",
+                                    fontFamily: "Open Sans,sans-serif", fontSize: 12,
+                                    fontWeight: filter === f ? 700 : 400,
+                                    textTransform: "capitalize",
+                                }}>
+                                {f === "all" ? `All (${total})`
+                                    : `${f.charAt(0).toUpperCase() + f.slice(1)} (${summary[f] || 0})`}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Column headers */}
+                <div style={{
+                    display: "grid", gridTemplateColumns: "1fr 120px 100px 80px",
+                    gap: 8, padding: "8px 12px", marginBottom: 6,
+                    backgroundColor: "#f9fafb", borderRadius: 8,
+                }}>
+                    {["Feedback Text", "Sentiment", "Confidence", "Model"].map((h, i) => (
+                        <span key={i} style={{
+                            fontFamily: "Montserrat,sans-serif", fontSize: 11,
+                            fontWeight: 700, color: "#9ca3af",
+                            textTransform: "uppercase", letterSpacing: 0.5,
+                        }}>{h}</span>
                     ))}
                 </div>
 
-                {history.length === 0 && (
-                    <p style={{
-                        fontFamily: "Open Sans, sans-serif", fontSize: 14,
-                        color: "#9ca3af", textAlign: "center", padding: "24px 0",
-                    }}>
-                        No analysis yet. Use Quick Analyze above or visit the Analyzer page.
-                    </p>
+                {/* Rows */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {displayed.map((r, i) => {
+                        const c = CFG[r.label] || CFG.neutral;
+                        return (
+                            <div key={i} style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 120px 100px 80px",
+                                gap: 8, padding: "12px 12px",
+                                backgroundColor: i % 2 === 0 ? "#fafafa" : "white",
+                                borderRadius: 8, alignItems: "center",
+                                border: "1px solid #f3f4f6",
+                            }}>
+                                {/* Text */}
+                                <p style={{
+                                    fontFamily: "Open Sans,sans-serif", fontSize: 13,
+                                    color: "#374151", margin: 0,
+                                    overflow: "hidden", textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                }}>{r.text}</p>
+
+                                {/* Label badge */}
+                                <span style={{
+                                    backgroundColor: c.bg, color: c.color,
+                                    fontSize: 11, padding: "4px 10px",
+                                    borderRadius: 20, fontWeight: 700,
+                                    fontFamily: "Open Sans,sans-serif",
+                                    textTransform: "uppercase", textAlign: "center",
+                                    border: `1px solid ${c.border}`,
+                                }}>{r.label}</span>
+
+                                {/* Confidence bar */}
+                                <div>
+                                    <div style={{
+                                        display: "flex", justifyContent: "space-between",
+                                        marginBottom: 3,
+                                    }}>
+                                        <span style={{
+                                            fontFamily: "Open Sans,sans-serif",
+                                            fontSize: 11, color: "#6b7280",
+                                        }}>
+                                            {Math.round((r.confidence || 0) * 100)}%
+                                        </span>
+                                    </div>
+                                    <div style={{
+                                        height: 5, backgroundColor: "#E9EAEC",
+                                        borderRadius: 99, overflow: "hidden"
+                                    }}>
+                                        <div style={{
+                                            height: "100%",
+                                            width: `${Math.round((r.confidence || 0) * 100)}%`,
+                                            backgroundColor: c.border, borderRadius: 99,
+                                        }} />
+                                    </div>
+                                </div>
+
+                                {/* Model */}
+                                <span style={{
+                                    fontFamily: "Open Sans,sans-serif",
+                                    fontSize: 11, color: "#9ca3af",
+                                    textTransform: "uppercase",
+                                }}>{r.model}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Show more / less */}
+                {filtered.length > 10 && (
+                    <button
+                        onClick={() => setShowAll(!showAll)}
+                        style={{
+                            width: "100%", marginTop: 14, padding: "12px",
+                            borderRadius: 12, border: "2px solid #E9EAEC",
+                            backgroundColor: "white", cursor: "pointer",
+                            fontFamily: "Montserrat,sans-serif", fontWeight: 700,
+                            fontSize: 13, color: "#003C64",
+                        }}>
+                        {showAll
+                            ? "Show Less ↑"
+                            : `Show All ${filtered.length} Results ↓`}
+                    </button>
                 )}
-            </Card>
+
+                {filtered.length === 0 && (
+                    <p style={{
+                        textAlign: "center", padding: "24px 0",
+                        fontFamily: "Open Sans,sans-serif",
+                        fontSize: 14, color: "#9ca3af",
+                    }}>No {filter} results found.</p>
+                )}
+            </div>
         </div>
     );
 };
